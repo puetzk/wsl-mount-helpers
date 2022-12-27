@@ -7,10 +7,8 @@
 //   This also adds --partition <Index>
 //   unless using you gave --bare, in which case it selects the physical device containing this partition
 //
-// Unlike wsl.exe, this executabler is manifested as requireAdministrator, and so it will automatically trigger UAC elevation if called from within wsl
-// If called as wsl-mount-findfs.exe --mount|--unmount <tag> [options ...] , it will automatically call wsl.exe --mount|--unmount within that elevation,
-// replacing the tag with its resolved form and appending any other options
-// giving that elevation to wsl.exe
+// If you pass the --mount|--unmount flags, it will also turn around and actally pass the call on to wsl.exe
+// Unlike calling wsl.exe yourself, it will automatically trigger UAC elevation if necessary for this.
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -39,7 +37,7 @@ void ReportLastError(const char *caption, ...)
 typedef void (*ENUMDEVICEHANDLE_CALLBACK)(LPCTSTR, HANDLE, LPVOID);
 
 // https://stackoverflow.com/questions/327718/how-to-list-physical-disks
-void EnumClassDevHandles(REFGUID ClassGuid, ENUMDEVICEHANDLE_CALLBACK callback, LPVOID context)
+void EnumClassDevHandles(REFGUID ClassGuid, DWORD dwDesiredAccess, ENUMDEVICEHANDLE_CALLBACK callback, LPVOID context)
 {
 	HDEVINFO hDiskClassDevices = SetupDiGetClassDevs(ClassGuid, NULL, NULL, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
 
@@ -67,7 +65,7 @@ void EnumClassDevHandles(REFGUID ClassGuid, ENUMDEVICEHANDLE_CALLBACK callback, 
 		}
 
 		if(success && DeviceInterfaceDetailData) {
-			HANDLE hDevice = CreateFile(DeviceInterfaceDetailData->DevicePath, GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			HANDLE hDevice = CreateFile(DeviceInterfaceDetailData->DevicePath, dwDesiredAccess, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 			if(hDevice == INVALID_HANDLE_VALUE) {
 				ReportLastError("CreateFile(%ls)", DeviceInterfaceDetailData->DevicePath);
 			} else {
@@ -254,11 +252,11 @@ int main(int argc, char* argv[])
 	char PartitionNumber[11];
 
 	if(!strcmp(tag, "--list")) {
-		EnumClassDevHandles(&GUID_DEVINTERFACE_DISK, &PrintPartitionInfo, NULL);
+		EnumClassDevHandles(&GUID_DEVINTERFACE_DISK, FILE_READ_ATTRIBUTES, &PrintPartitionInfo, NULL);
 	} else if(!strncmp(tag, "PARTUUID=", 9)) {
 		struct FindGUIDContext context = { 0 };
 		if(parse_guid(tag+9, &context.guid)) {
-			EnumClassDevHandles(&GUID_DEVINTERFACE_DISK, &MatchPARTUUID, &context);
+			EnumClassDevHandles(&GUID_DEVINTERFACE_DISK, FILE_READ_ATTRIBUTES, &MatchPARTUUID, &context);
 			wsl_device_argv[0] = context.PhysicalDrive;
 			if(!bare) {
 				wsl_device_argv[1] = "--partition";
@@ -272,7 +270,7 @@ int main(int argc, char* argv[])
 		RunAsHighIntegrity();
 		struct FindGUIDContext context = { 0 };
 		if(parse_guid(tag+7, &context.guid)) {
-			EnumClassDevHandles(&GUID_DEVINTERFACE_DISK, &MatchPTUUID, &context);
+			EnumClassDevHandles(&GUID_DEVINTERFACE_DISK, FILE_READ_ATTRIBUTES, &MatchPTUUID, &context);
 			wsl_device_argv[0] = context.PhysicalDrive;
 		} else {
 			fprintf(stderr, "*** %s: invalid GUID\n", tag);
@@ -291,35 +289,41 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "*** wsl.exe not found by SearchPath()\n");
 		}
 
-		const char **wsl_argv = malloc(sizeof(char*) * (argc + MAX_TAG_ARGC));
-		int wsl_argc = 0;
-		wsl_argv[wsl_argc++] = wsl_exe;
-		wsl_argv[wsl_argc++] = mount;
+		SHELLEXECUTEINFOA info = { .cbSize = sizeof(SHELLEXECUTEINFO) };
+		info.fMask = SEE_MASK_NOCLOSEPROCESS;
+		info.lpVerb = "runas";
+		info.lpFile = "wsl.exe";
+		char wsl_parameters[2048] = ""; // ShellExecute lpParameters has a lower limit than the 32768 of CreateProcess
+		info.lpParameters = wsl_parameters;
+
+		strcat_s(wsl_parameters,sizeof(wsl_parameters),mount);
 
 		for(int i = 0; wsl_device_argv[i]; ++i) {
-			wsl_argv[wsl_argc++] = wsl_device_argv[i];
+			strcat_s(wsl_parameters,sizeof(wsl_parameters)," ");
+			strcat_s(wsl_parameters,sizeof(wsl_parameters),wsl_device_argv[i]);
 		}
 
 		for(int i = options_argindex; i < argc; ++i) {
-			wsl_argv[wsl_argc++] = argv[i];
+			strcat_s(wsl_parameters,sizeof(wsl_parameters)," ");
+			strcat_s(wsl_parameters,sizeof(wsl_parameters),argv[i]);
 		}
-		wsl_argv[wsl_argc] = NULL;
 
-		if(_execv(wsl_exe, wsl_argv) < 0) {
-			ReportLastError("execv");
-			// show failed command
-			fputs("           ", stderr);
-			for(int i = 0; wsl_argv[i]; ++i) {
-				fputs(wsl_argv[i], stderr);
-				fputc(' ', stderr);
-			}
-			fputc(L'\n', stderr);
-		}
-	} else {
-		for(int i = 0; wsl_device_argv[i]; ++i) {
-			if(i>0) fputc(' ', stdout);
-			fputs(wsl_device_argv[i], stdout);
-		}
-		fputwc(L'\n', stdout);
+		if(!ShellExecuteExA(&info)) ReportLastError("ShellExecuteEx");
+		// FIXME: using runas like this loses the stdout/stderr from wsl.exe, even when *not* crossing integrity level isolation
+		// could look into CreateProcessElevated(): https://www.codeproject.com/Articles/19165/Vista-UAC-The-Definitive-Guide
+		// or the Elevation:Administrator! COM moniker https://learn.microsoft.com/en-us/windows/win32/com/the-com-elevation-moniker
+		// as other ways of getting access to high-integrity context that might better support capturing stdout/stderr
+
+		WaitForSingleObject(info.hProcess,INFINITE);
+		DWORD ExitCode;
+		GetExitCodeProcess(info.hProcess,&ExitCode);
+		CloseHandle(info.hProcess);
+		return ExitCode;
 	}
+
+	for(int i = 0; wsl_device_argv[i]; ++i) {
+		if(i>0) fputc(' ', stdout);
+		fputs(wsl_device_argv[i], stdout);
+	}
+	fputwc(L'\n', stdout);
 }
