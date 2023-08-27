@@ -40,6 +40,19 @@ whether you're using the /data volume or not, and it's asynchronous (/data is em
 ```
 [boot]
 systemd=true
+[interop]
+enabled=true
+```
+
+### /etc/binfmt.d/WSLInterop.conf
+When using systemd mode, wsl no longer (since some July/Aug 2023 update?) enables .exe interop,
+which is required in order to run the win32 code of wsl-mount-findfs.exe and luks-askpass-wincred.exe
+https://www.freedesktop.org/software/systemd/man/binfmt.d.html#
+https://serverfault.com/questions/1141533/wsl2-stopped-running-windows-tools-seemingly-all-of-a-sudden-cannot-execute-bi
+https://github.com/microsoft/WSL/issues/8843
+https://github.com/systemd/systemd/issues/28126
+```
+:WSLInterop:M::MZ::/init:PF
 ```
 
 ### /etc/systemd/system/wsl-mount@
