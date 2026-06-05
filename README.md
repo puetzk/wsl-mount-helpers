@@ -8,6 +8,10 @@ UAC/credential prompts as necessary to bring it online.
 [cryptsetup]: https://man7.org/linux/man-pages/man8/cryptsetup.8.html
 [wsl UNC]: https://devblogs.microsoft.com/commandline/whats-new-for-wsl-in-windows-10-version-1903/#accessing-linux-files-from-windows
 
+# Prerequisites
+
+`apt install cryptsetup`
+
 ## Usage (Debian cryptdisks_start)
 
 Debian/Ubuntu's [crypttab]/cryptdisks_start supports a `keyscript=` option (that systemd does not), giving a place to hook in luks-askpass-wincred
