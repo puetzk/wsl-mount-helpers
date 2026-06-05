@@ -64,6 +64,16 @@ https://github.com/systemd/systemd/issues/28126
 :WSLInterop:M::MZ::/init:PF
 ```
 
+When this is needed, the wsl-mount@.service and systemd-cryptsetup@data.service both need
+```
+After=systemd-binfmt.service
+```
+
+Ubuntu 24.04 WSL distribution enables systemd by default, but seemingly disables
+/usr/lib/systemd/system/systemd-binfmt.service.d/wsl.conf
+ConditionVirtualization=!wsl
+https://github.com/ubuntu/WSL/pull/335
+
 ### /etc/systemd/system/wsl-mount@.service
 ```
 [Unit]
