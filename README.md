@@ -12,6 +12,11 @@ UAC/credential prompts as necessary to bring it online.
 
 `apt install cryptsetup`
 
+# Determining partition GUIDs
+
+`lsblk` in linux
+`Get-Partition | Select-Object DiskNumber, PartitionNumber, DriveLetter, Size, Guid' in powershell
+
 ## Usage (Debian cryptdisks_start)
 
 Debian/Ubuntu's [crypttab]/cryptdisks_start supports a `keyscript=` option (that systemd does not), giving a place to hook in luks-askpass-wincred
