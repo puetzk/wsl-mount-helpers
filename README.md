@@ -55,7 +55,7 @@ https://github.com/systemd/systemd/issues/28126
 :WSLInterop:M::MZ::/init:PF
 ```
 
-### /etc/systemd/system/wsl-mount@
+### /etc/systemd/system/wsl-mount@.service
 ```
 [Unit]
 Description=wsl.exe --mount <Device> --bare
@@ -67,7 +67,7 @@ ExecStart=/usr/local/sbin/wsl-mount-findfs.exe --mount "%I" --bare
 ExecCondition=sh -c '! findfs "%I"'
 ```
 
-### /etc/systemd/systemd-cryptsetup@data.service
+### /etc/systemd/system/systemd-cryptsetup@data.service
 
 use `systemd-escape ...` to escape your PARTUUID=... string
 
@@ -103,7 +103,7 @@ BindsTo=systemd-cryptsetup@data.service
 After=systemd-cryptsetup@data.service
 
 [Mount]
-What=/dev/mapper/luks-data
+What=/dev/mapper/data
 Where=/data
 Type=btrfs
 Options=subvol=@data
