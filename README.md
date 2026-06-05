@@ -90,10 +90,10 @@ Before=blockdev@dev-mapper-%i.target
 Wants=blockdev@dev-mapper-%i.target
 Conflicts=umount.target
 Before=cryptsetup.target
-BindsTo=wsl-mount@PARTUUID\x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f
-After=wsl-mount@PARTUUID\x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f
-BindsTo=dev-disk-by\x2dpartuuid-x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f
-After=dev-disk-by\x2dpartuuid-x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f
+BindsTo=wsl-mount@PARTUUID\x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f.service
+After=wsl-mount@PARTUUID\x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f.service
+BindsTo=dev-disk-by\x2dpartuuid-x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f.device
+After=dev-disk-by\x2dpartuuid-x3d9cae1423\x2d26bb\x2d4676\x2d87bf\x2dec2dd707b27f.device
 Before=umount.target
 
 [Service]
